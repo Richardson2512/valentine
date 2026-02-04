@@ -383,16 +383,16 @@
       const boxWidth = rect.width;
       const boxHeight = rect.height;
 
-      // Keep inside viewport with some margin
-      const margin = 16;
-      const maxX = viewportWidth - boxWidth - margin;
-      const maxY = viewportHeight - boxHeight - margin;
+      // Keep inside viewport with some margin (more generous on small screens)
+      const margin = isSmallScreen ? 48 : 16;
+      const maxX = Math.max(margin, viewportWidth - boxWidth - margin);
+      const maxY = Math.max(margin, viewportHeight - boxHeight - margin);
       const minX = margin;
       const minY = margin;
 
       let newLeft, newTop;
       let attempts = 0;
-      const safeDistance = 180; // ensure it's far from cursor
+      const safeDistance = 180; // ensure it's far from cursor / touch
 
       do {
         newLeft = Math.random() * (maxX - minX) + minX;
@@ -474,6 +474,10 @@
       launchConfetti();
       successMessage.classList.add("visible");
 
+      // Hide No box and thought bubble after success
+      noBox.style.display = "none";
+      thoughtBubble.classList.remove("visible");
+
       // Add a tiny "happy click" animation
       yesButton.style.transform = `scale(${yesScale * 1.08}) translateY(-2px)`;
       yesButton.style.background =
@@ -491,8 +495,10 @@
       const startTop = h * 0.55 - rect.height / 2;
 
       noBox.style.position = "fixed";
-      noBox.style.left = `${Math.max(20, startLeft)}px`;
-      noBox.style.top = `${Math.max(20, startTop)}px`;
+      const clampedLeft = Math.min(Math.max(20, startLeft), w - rect.width - 20);
+      const clampedTop = Math.min(Math.max(20, startTop), h - rect.height - 20);
+      noBox.style.left = `${clampedLeft}px`;
+      noBox.style.top = `${clampedTop}px`;
     });
 
     // Adjust No box if viewport size changes
