@@ -321,6 +321,16 @@
     const maxYesScale = 1.6;
     const scaleStep = 0.08;
 
+    // Device detection
+    const isTouchDevice =
+      "ontouchstart" in window ||
+      navigator.maxTouchPoints > 0 ||
+      navigator.msMaxTouchPoints > 0;
+    const isSmallScreen = window.matchMedia("(max-width: 768px)").matches;
+    const deviceType = isTouchDevice
+      ? (isSmallScreen ? "mobile" : "tablet")
+      : "desktop";
+
     // Distance threshold to trigger "No" escape
     const TRIGGER_DISTANCE = 130;
 
@@ -427,7 +437,21 @@
       }
     }
 
-    document.addEventListener("mousemove", moveNoBoxAway);
+    // Desktop: track cursor proximity
+    if (deviceType === "desktop") {
+      document.addEventListener("mousemove", moveNoBoxAway);
+    }
+
+    // Touch devices (mobile/tablet): make the No box jump away whenever it's touched
+    if (deviceType === "mobile" || deviceType === "tablet") {
+      noBox.addEventListener("touchstart", (event) => {
+        const touch = event.touches[0] || event.changedTouches[0];
+        if (!touch) return;
+        // Prevent the touch from being treated as a normal tap
+        event.preventDefault();
+        moveNoBoxAway({ clientX: touch.clientX, clientY: touch.clientY });
+      }, { passive: false });
+    }
 
     // Confetti celebration
     function launchConfetti() {
