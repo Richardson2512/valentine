@@ -171,6 +171,7 @@
         box-shadow 0.25s ease,
         background 0.25s ease;
       transform-origin: center;
+      z-index: 10;
     }
 
     #yesButton:hover {
@@ -178,15 +179,9 @@
       box-shadow: 0 16px 30px rgba(255, 105, 180, 0.5);
     }
 
-    /* This class gets adjusted dynamically */
-    #yesButton.grow {
-      transform: scale(1.1);
-    }
-
     /* No "box" (non-button) */
     #noBox {
-      position: absolute;
-      right: -120px;
+      position: fixed;
       padding: 0.3rem 0.7rem;
       border-radius: 999px;
       border: 2px dashed rgba(188, 87, 119, 0.9);
@@ -198,6 +193,7 @@
       font-size: 0.85rem;
       transition: transform 0.18s ease-out;
       white-space: nowrap;
+      z-index: 5;
     }
 
     /* Thought bubble */
@@ -218,7 +214,7 @@
       pointer-events: none;
       transition: opacity 0.3s ease, transform 0.3s ease;
       transform-origin: bottom center;
-      z-index: 2;
+      z-index: 20;
     }
 
     .thought-bubble::after {
@@ -257,13 +253,6 @@
         flex-direction: column;
         gap: 2rem;
         min-height: 140px;
-      }
-
-      #noBox {
-        position: absolute;
-        right: auto;
-        left: 50%;
-        transform: translateX(80px);
       }
 
       .thought-bubble {
@@ -309,7 +298,7 @@
     const messages = [
       "I'm here! You can click me! 💕",
       "I won't run away, I promise! 😊",
-      "Click me instead! 💝",
+      "Click me instead! 💖",
       "I'm the better choice! ❤️",
       "Come on, you know you want to! 💗"
     ];
@@ -321,18 +310,43 @@
     const maxYesScale = 1.6;
     const scaleStep = 0.08;
 
-    // Device detection
-    const isTouchDevice =
-      "ontouchstart" in window ||
-      navigator.maxTouchPoints > 0 ||
-      navigator.msMaxTouchPoints > 0;
-    const isSmallScreen = window.matchMedia("(max-width: 768px)").matches;
-    const deviceType = isTouchDevice
-      ? (isSmallScreen ? "mobile" : "tablet")
-      : "desktop";
+    // Improved device detection
+    function detectDevice() {
+      const hasTouch = 'ontouchstart' in window || 
+                       navigator.maxTouchPoints > 0 || 
+                       navigator.msMaxTouchPoints > 0;
+      
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const userAgent = navigator.userAgent.toLowerCase();
+      
+      // Check for iPad specifically
+      const isIPad = /ipad/.test(userAgent) || 
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                     (/macintosh/.test(userAgent) && hasTouch);
+      
+      // Check for Android tablet
+      const isAndroidTablet = /android/.test(userAgent) && !/mobile/.test(userAgent);
+      
+      // Determine device type
+      if (isIPad || isAndroidTablet || (hasTouch && width >= 768 && width <= 1366)) {
+        return { type: 'tablet', hasTouch: true, width, height };
+      } else if (hasTouch && width < 768) {
+        return { type: 'mobile', hasTouch: true, width, height };
+      } else if (hasTouch && width > 1366) {
+        // Large touchscreen - could be touch laptop
+        return { type: 'desktop-touch', hasTouch: true, width, height };
+      } else {
+        return { type: 'desktop', hasTouch: false, width, height };
+      }
+    }
 
-    // Distance threshold to trigger "No" escape
-    const TRIGGER_DISTANCE = 130;
+    const device = detectDevice();
+    console.log('Detected device:', device);
+
+    // Distance thresholds based on device
+    const TRIGGER_DISTANCE = device.type === 'mobile' ? 100 : 130;
+    const MIN_DISTANCE_FROM_YES = device.type === 'mobile' ? 200 : 250;
 
     // Create floating decorative hearts
     function createFloatingHearts(count = 10) {
@@ -375,61 +389,158 @@
       yesButton.style.transform = `scale(${yesScale})`;
     }
 
-    function getRandomPositionForNoBox(mouseX, mouseY) {
+    // Get the current bounding box of Yes button (accounting for scale)
+    function getYesButtonBounds() {
+      const rect = yesButton.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        centerX: rect.left + rect.width / 2,
+        centerY: rect.top + rect.height / 2
+      };
+    }
+
+    // Check if two rectangles overlap with a minimum distance buffer
+    function wouldOverlap(box1, box2, minDistance) {
+      // Calculate centers
+      const box1CenterX = box1.left + box1.width / 2;
+      const box1CenterY = box1.top + box1.height / 2;
+      const box2CenterX = box2.left + box2.width / 2;
+      const box2CenterY = box2.top + box2.height / 2;
+
+      // Calculate distance between centers
+      const dx = box1CenterX - box2CenterX;
+      const dy = box1CenterY - box2CenterY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Minimum distance needed (half widths + half heights + buffer)
+      const minNeeded = (box1.width / 2 + box2.width / 2 + 
+                        box1.height / 2 + box2.height / 2) / 2 + minDistance;
+
+      return distance < minNeeded;
+    }
+
+    function getRandomPositionForNoBox(triggerX, triggerY) {
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const rect = noBox.getBoundingClientRect();
+      const noRect = noBox.getBoundingClientRect();
+      const yesRect = getYesButtonBounds();
 
-      const boxWidth = rect.width;
-      const boxHeight = rect.height;
+      const boxWidth = noRect.width;
+      const boxHeight = noRect.height;
 
-      // Keep inside viewport with some margin (more generous on small screens)
-      const margin = isSmallScreen ? 48 : 16;
-      const maxX = Math.max(margin, viewportWidth - boxWidth - margin);
-      const maxY = Math.max(margin, viewportHeight - boxHeight - margin);
+      // Adjust margins based on device type
+      let margin;
+      if (device.type === 'mobile') {
+        margin = 60;
+      } else if (device.type === 'tablet') {
+        margin = 80;
+      } else {
+        margin = 40;
+      }
+
+      const maxX = viewportWidth - boxWidth - margin;
+      const maxY = viewportHeight - boxHeight - margin;
       const minX = margin;
       const minY = margin;
 
       let newLeft, newTop;
       let attempts = 0;
-      const safeDistance = 180; // ensure it's far from cursor / touch
+      const maxAttempts = 50;
+      const safeDistanceFromTrigger = device.type === 'mobile' ? 150 : 200;
 
       do {
+        // Generate random position
         newLeft = Math.random() * (maxX - minX) + minX;
         newTop = Math.random() * (maxY - minY) + minY;
 
+        // Check distance from trigger point (cursor/touch)
         const centerX = newLeft + boxWidth / 2;
         const centerY = newTop + boxHeight / 2;
-        const dx = centerX - mouseX;
-        const dy = centerY - mouseY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dxTrigger = centerX - triggerX;
+        const dyTrigger = centerY - triggerY;
+        const distanceFromTrigger = Math.sqrt(dxTrigger * dxTrigger + dyTrigger * dyTrigger);
 
-        if (distance > safeDistance || attempts > 10) {
+        // Create hypothetical box position
+        const hypotheticalBox = {
+          left: newLeft,
+          top: newTop,
+          width: boxWidth,
+          height: boxHeight
+        };
+
+        // Check if it overlaps with Yes button
+        const overlapsYes = wouldOverlap(hypotheticalBox, yesRect, MIN_DISTANCE_FROM_YES);
+
+        // Accept position if it's far enough from trigger and doesn't overlap Yes button
+        if (distanceFromTrigger > safeDistanceFromTrigger && !overlapsYes) {
           break;
         }
+
         attempts++;
-      } while (true);
+      } while (attempts < maxAttempts);
+
+      // If we couldn't find a good position after max attempts, find the farthest corner
+      if (attempts >= maxAttempts) {
+        const corners = [
+          { left: margin, top: margin },
+          { left: maxX, top: margin },
+          { left: margin, top: maxY },
+          { left: maxX, top: maxY }
+        ];
+
+        let farthestCorner = corners[0];
+        let maxDist = 0;
+
+        corners.forEach(corner => {
+          const centerX = corner.left + boxWidth / 2;
+          const centerY = corner.top + boxHeight / 2;
+          
+          // Distance from Yes button
+          const dxYes = centerX - yesRect.centerX;
+          const dyYes = centerY - yesRect.centerY;
+          const distYes = Math.sqrt(dxYes * dxYes + dyYes * dyYes);
+          
+          // Distance from trigger
+          const dxTrigger = centerX - triggerX;
+          const dyTrigger = centerY - triggerY;
+          const distTrigger = Math.sqrt(dxTrigger * dxTrigger + dyTrigger * dyTrigger);
+          
+          const totalDist = distYes + distTrigger;
+          
+          if (totalDist > maxDist) {
+            maxDist = totalDist;
+            farthestCorner = corner;
+          }
+        });
+
+        newLeft = farthestCorner.left;
+        newTop = farthestCorner.top;
+      }
 
       return { left: newLeft, top: newTop };
     }
 
     function moveNoBoxAway(event) {
-      const mouseX = event.clientX;
-      const mouseY = event.clientY;
+      const eventX = event.clientX;
+      const eventY = event.clientY;
       const rect = noBox.getBoundingClientRect();
 
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
 
-      const dx = centerX - mouseX;
-      const dy = centerY - mouseY;
+      const dx = centerX - eventX;
+      const dy = centerY - eventY;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       if (distance < TRIGGER_DISTANCE) {
-        const { left, top } = getRandomPositionForNoBox(mouseX, mouseY);
+        const { left, top } = getRandomPositionForNoBox(eventX, eventY);
         noBox.style.left = `${left}px`;
         noBox.style.top = `${top}px`;
-        noBox.style.position = "fixed";
 
         // Yes button reacts
         growYesButton();
@@ -438,19 +549,43 @@
     }
 
     // Desktop: track cursor proximity
-    if (deviceType === "desktop") {
+    if (device.type === 'desktop') {
       document.addEventListener("mousemove", moveNoBoxAway);
     }
 
-    // Touch devices (mobile/tablet): make the No box jump away whenever it's touched
-    if (deviceType === "mobile" || deviceType === "tablet") {
+    // Desktop with touch capability: support both
+    if (device.type === 'desktop-touch') {
+      document.addEventListener("mousemove", moveNoBoxAway);
       noBox.addEventListener("touchstart", (event) => {
         const touch = event.touches[0] || event.changedTouches[0];
         if (!touch) return;
-        // Prevent the touch from being treated as a normal tap
         event.preventDefault();
         moveNoBoxAway({ clientX: touch.clientX, clientY: touch.clientY });
       }, { passive: false });
+    }
+
+    // Touch devices (mobile/tablet): make the No box jump away whenever it's touched
+    if (device.type === 'mobile' || device.type === 'tablet') {
+      noBox.addEventListener("touchstart", (event) => {
+        const touch = event.touches[0] || event.changedTouches[0];
+        if (!touch) return;
+        event.preventDefault();
+        moveNoBoxAway({ clientX: touch.clientX, clientY: touch.clientY });
+      }, { passive: false });
+
+      // Also add a hover/proximity detection for tablets with precise touch
+      let touchMoveHandler = null;
+      document.addEventListener("touchmove", (event) => {
+        if (touchMoveHandler) {
+          clearTimeout(touchMoveHandler);
+        }
+        touchMoveHandler = setTimeout(() => {
+          const touch = event.touches[0];
+          if (touch) {
+            moveNoBoxAway({ clientX: touch.clientX, clientY: touch.clientY });
+          }
+        }, 50);
+      }, { passive: true });
     }
 
     // Confetti celebration
@@ -474,6 +609,12 @@
       launchConfetti();
       successMessage.classList.add("visible");
 
+      // Stop the message rotation interval completely
+      if (messageInterval) {
+        clearInterval(messageInterval);
+        messageInterval = null;
+      }
+
       // Hide No box and thought bubble after success
       noBox.style.display = "none";
       thoughtBubble.classList.remove("visible");
@@ -487,33 +628,92 @@
       }, 200);
     });
 
-    // Ensure No box starts in a decent position on load
-    window.addEventListener("load", () => {
+    // Initialize No box position on load
+    function initializeNoBoxPosition() {
       const { innerWidth: w, innerHeight: h } = window;
-      const rect = noBox.getBoundingClientRect();
-      const startLeft = w * 0.65 - rect.width / 2;
-      const startTop = h * 0.55 - rect.height / 2;
+      const noRect = noBox.getBoundingClientRect();
+      const yesRect = getYesButtonBounds();
 
-      noBox.style.position = "fixed";
-      const clampedLeft = Math.min(Math.max(20, startLeft), w - rect.width - 20);
-      const clampedTop = Math.min(Math.max(20, startTop), h - rect.height - 20);
+      let startLeft, startTop;
+
+      if (device.type === 'mobile') {
+        // For mobile, position it to the right side, avoiding Yes button
+        startLeft = w * 0.7;
+        startTop = h * 0.6;
+      } else if (device.type === 'tablet') {
+        // For tablet, position it on the right side with more space
+        startLeft = w * 0.7;
+        startTop = h * 0.5;
+      } else {
+        // For desktop, position it to the right of center
+        startLeft = w * 0.65;
+        startTop = h * 0.5;
+      }
+
+      // Ensure it doesn't overlap with Yes button
+      let attempts = 0;
+      while (attempts < 10) {
+        const hypotheticalBox = {
+          left: startLeft,
+          top: startTop,
+          width: noRect.width,
+          height: noRect.height
+        };
+
+        if (!wouldOverlap(hypotheticalBox, yesRect, MIN_DISTANCE_FROM_YES)) {
+          break;
+        }
+
+        // Move it further right and down
+        startLeft += 50;
+        startTop += 30;
+        attempts++;
+      }
+
+      // Clamp to viewport
+      const margin = device.type === 'mobile' ? 60 : 40;
+      const clampedLeft = Math.min(Math.max(margin, startLeft), w - noRect.width - margin);
+      const clampedTop = Math.min(Math.max(margin, startTop), h - noRect.height - margin);
+      
       noBox.style.left = `${clampedLeft}px`;
       noBox.style.top = `${clampedTop}px`;
+    }
+
+    window.addEventListener("load", () => {
+      // Small delay to ensure all elements are rendered
+      setTimeout(initializeNoBoxPosition, 100);
     });
 
     // Adjust No box if viewport size changes
     window.addEventListener("resize", () => {
       const rect = noBox.getBoundingClientRect();
+      const yesRect = getYesButtonBounds();
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       let left = rect.left;
       let top = rect.top;
 
-      left = Math.min(Math.max(8, left), vw - rect.width - 8);
-      top = Math.min(Math.max(8, top), vh - rect.height - 8);
+      const margin = device.type === 'mobile' ? 60 : 40;
 
-      noBox.style.left = `${left}px`;
-      noBox.style.top = `${top}px`;
+      // Clamp to viewport
+      left = Math.min(Math.max(margin, left), vw - rect.width - margin);
+      top = Math.min(Math.max(margin, top), vh - rect.height - margin);
+
+      // Check if current position overlaps with Yes button
+      const currentBox = {
+        left: left,
+        top: top,
+        width: rect.width,
+        height: rect.height
+      };
+
+      if (wouldOverlap(currentBox, yesRect, MIN_DISTANCE_FROM_YES)) {
+        // Reposition if overlapping
+        initializeNoBoxPosition();
+      } else {
+        noBox.style.left = `${left}px`;
+        noBox.style.top = `${top}px`;
+      }
     });
   </script>
 </body>
