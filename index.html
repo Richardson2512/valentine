@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Will You Be My Valentine?</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Confetti library -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <style>
+    :root {
+      --bg-pink: #fff0f5;
+      --accent-pink: #ff6fa5;
+      --accent-pink-dark: #ff4c8b;
+      --yes-shadow: 0 12px 24px rgba(255, 105, 180, 0.35);
+      --text-color: #5c2b33;
+      --bubble-bg: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: var(--bg-pink);
+      color: var(--text-color);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Subtle floating hearts background */
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.2;
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(255, 105, 180, 0.4) 0, transparent 45%),
+        radial-gradient(circle at 80% 10%, rgba(255, 20, 147, 0.3) 0, transparent 50%),
+        radial-gradient(circle at 20% 80%, rgba(255, 182, 193, 0.5) 0, transparent 50%),
+        radial-gradient(circle at 90% 70%, rgba(255, 105, 180, 0.35) 0, transparent 45%);
+      z-index: -2;
+    }
+
+    body::after {
+      animation: floatHearts 18s linear infinite;
+      opacity: 0.35;
+    }
+
+    @keyframes floatHearts {
+      0% {
+        transform: translateY(10px);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+      100% {
+        transform: translateY(10px);
+      }
+    }
+
+    .heart-layer {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .heart {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background: rgba(255, 105, 180, 0.7);
+      transform: rotate(45deg);
+      border-radius: 4px;
+      animation: floatUp 16s linear infinite;
+    }
+
+    .heart::before,
+    .heart::after {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background: inherit;
+      border-radius: 50%;
+    }
+
+    .heart::before {
+      left: -8px;
+      top: 0;
+    }
+
+    .heart::after {
+      top: -8px;
+      left: 0;
+    }
+
+    @keyframes floatUp {
+      0% {
+        transform: translateY(40px) rotate(45deg) scale(0.7);
+        opacity: 0;
+      }
+      20% {
+        opacity: 0.8;
+      }
+      80% {
+        opacity: 0.8;
+      }
+      100% {
+        transform: translateY(-120vh) rotate(45deg) scale(1.1);
+        opacity: 0;
+      }
+    }
+
+    .container {
+      text-align: center;
+      padding: 24px;
+      max-width: 640px;
+      width: 100%;
+    }
+
+    h1 {
+      font-family: "Playfair Display", "Times New Roman", serif;
+      font-size: clamp(2.4rem, 4vw + 1rem, 3.8rem);
+      margin-bottom: 1.5rem;
+      color: #b03060;
+      letter-spacing: 0.05em;
+    }
+
+    .subtext {
+      font-size: 1rem;
+      margin-bottom: 2rem;
+      opacity: 0.8;
+    }
+
+    .buttons-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 1.5rem;
+      min-height: 80px;
+    }
+
+    /* Yes button */
+    #yesButton {
+      position: relative;
+      padding: 0.9rem 2.4rem;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, #ff8fb1, #ff4c8b);
+      color: white;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--yes-shadow);
+      transition:
+        transform 0.25s ease,
+        box-shadow 0.25s ease,
+        background 0.25s ease;
+      transform-origin: center;
+    }
+
+    #yesButton:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 16px 30px rgba(255, 105, 180, 0.5);
+    }
+
+    /* This class gets adjusted dynamically */
+    #yesButton.grow {
+      transform: scale(1.1);
+    }
+
+    /* No "box" (non-button) */
+    #noBox {
+      position: absolute;
+      right: -120px;
+      padding: 0.6rem 1.3rem;
+      border-radius: 999px;
+      border: 2px dashed rgba(188, 87, 119, 0.9);
+      color: #8b3a62;
+      cursor: default;
+      user-select: none;
+      background: rgba(255, 255, 255, 0.8);
+      font-weight: 500;
+      transition: transform 0.18s ease-out;
+      white-space: nowrap;
+    }
+
+    /* Thought bubble */
+    .thought-bubble {
+      position: absolute;
+      top: -90px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 220px;
+      max-width: 260px;
+      padding: 0.75rem 1rem;
+      background: var(--bubble-bg);
+      border-radius: 18px;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+      font-size: 0.95rem;
+      line-height: 1.4;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      transform-origin: bottom center;
+      z-index: 2;
+    }
+
+    .thought-bubble::after {
+      content: "";
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%) rotate(45deg);
+      width: 18px;
+      height: 18px;
+      background: var(--bubble-bg);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+    }
+
+    .thought-bubble.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-4px);
+    }
+
+    .success-message {
+      margin-top: 2rem;
+      font-size: 1.1rem;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+
+    .success-message.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 600px) {
+      .buttons-wrapper {
+        flex-direction: column;
+        gap: 2rem;
+        min-height: 140px;
+      }
+
+      #noBox {
+        position: absolute;
+        right: auto;
+        left: 50%;
+        transform: translateX(80px);
+      }
+
+      .thought-bubble {
+        top: -80px;
+        max-width: 220px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="heart-layer" aria-hidden="true"></div>
+
+  <div class="container">
+    <h1>Will you be my valentine?</h1>
+    <p class="subtext">
+      No pressure... but one of these options might be just a little more loyal than the other.
+    </p>
+
+    <div class="buttons-wrapper" id="buttonsWrapper">
+      <button id="yesButton">Yes 💖</button>
+      <div id="noBox">No</div>
+
+      <div class="thought-bubble" id="thoughtBubble">
+        <span id="thoughtText">I'm here! You can click me! 💕</span>
+      </div>
+    </div>
+
+    <p class="success-message" id="successMessage">
+      Thanks for saying yes! See you on the 14th! 💕
+    </p>
+  </div>
+
+  <script>
+    const yesButton = document.getElementById("yesButton");
+    const noBox = document.getElementById("noBox");
+    const wrapper = document.getElementById("buttonsWrapper");
+    const thoughtBubble = document.getElementById("thoughtBubble");
+    const thoughtText = document.getElementById("thoughtText");
+    const successMessage = document.getElementById("successMessage");
+    const heartLayer = document.querySelector(".heart-layer");
+
+    // Thought bubble messages
+    const messages = [
+      "I'm here! You can click me! 💕",
+      "I won't run away, I promise! 😊",
+      "Click me instead! 💝",
+      "I'm the better choice! ❤️",
+      "Come on, you know you want to! 💗"
+    ];
+    let messageIndex = 0;
+    let messageInterval = null;
+
+    // Dynamic scale for Yes button
+    let yesScale = 1;
+    const maxYesScale = 1.6;
+    const scaleStep = 0.08;
+
+    // Distance threshold to trigger "No" escape
+    const TRIGGER_DISTANCE = 130;
+
+    // Create floating decorative hearts
+    function createFloatingHearts(count = 10) {
+      const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+      for (let i = 0; i < count; i++) {
+        const heart = document.createElement("div");
+        heart.classList.add("heart");
+        const left = Math.random() * vw;
+        const delay = Math.random() * 16;
+        const duration = 12 + Math.random() * 8;
+        const scale = 0.6 + Math.random() * 0.8;
+
+        heart.style.left = `${left}px`;
+        heart.style.bottom = `${Math.random() * 40}px`;
+        heart.style.animationDuration = `${duration}s`;
+        heart.style.animationDelay = `-${delay}s`;
+        heart.style.transform = `rotate(45deg) scale(${scale})`;
+
+        heartLayer.appendChild(heart);
+      }
+    }
+
+    createFloatingHearts(14);
+
+    function startMessageRotation() {
+      if (messageInterval) return;
+      messageInterval = setInterval(() => {
+        messageIndex = (messageIndex + 1) % messages.length;
+        thoughtText.textContent = messages[messageIndex];
+      }, 3000);
+    }
+
+    function showThoughtBubble() {
+      thoughtBubble.classList.add("visible");
+      startMessageRotation();
+    }
+
+    function growYesButton() {
+      yesScale = Math.min(maxYesScale, yesScale + scaleStep);
+      yesButton.style.transform = `scale(${yesScale})`;
+    }
+
+    function getRandomPositionForNoBox(mouseX, mouseY) {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const rect = noBox.getBoundingClientRect();
+
+      const boxWidth = rect.width;
+      const boxHeight = rect.height;
+
+      // Keep inside viewport with some margin
+      const margin = 16;
+      const maxX = viewportWidth - boxWidth - margin;
+      const maxY = viewportHeight - boxHeight - margin;
+      const minX = margin;
+      const minY = margin;
+
+      let newLeft, newTop;
+      let attempts = 0;
+      const safeDistance = 180; // ensure it's far from cursor
+
+      do {
+        newLeft = Math.random() * (maxX - minX) + minX;
+        newTop = Math.random() * (maxY - minY) + minY;
+
+        const centerX = newLeft + boxWidth / 2;
+        const centerY = newTop + boxHeight / 2;
+        const dx = centerX - mouseX;
+        const dy = centerY - mouseY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > safeDistance || attempts > 10) {
+          break;
+        }
+        attempts++;
+      } while (true);
+
+      return { left: newLeft, top: newTop };
+    }
+
+    function moveNoBoxAway(event) {
+      const mouseX = event.clientX;
+      const mouseY = event.clientY;
+      const rect = noBox.getBoundingClientRect();
+
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      const dx = centerX - mouseX;
+      const dy = centerY - mouseY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < TRIGGER_DISTANCE) {
+        const { left, top } = getRandomPositionForNoBox(mouseX, mouseY);
+        noBox.style.left = `${left}px`;
+        noBox.style.top = `${top}px`;
+        noBox.style.position = "fixed";
+
+        // Yes button reacts
+        growYesButton();
+        showThoughtBubble();
+      }
+    }
+
+    document.addEventListener("mousemove", moveNoBoxAway);
+
+    // Confetti celebration
+    function launchConfetti() {
+      const duration = 2000;
+      const end = Date.now() + duration;
+
+      (function frame() {
+        confetti({
+          particleCount: 60,
+          spread: 70,
+          origin: { x: Math.random(), y: Math.random() * 0.4 + 0.1 }
+        });
+        if (Date.now() < end) {
+          requestAnimationFrame(frame);
+        }
+      })();
+    }
+
+    yesButton.addEventListener("click", () => {
+      launchConfetti();
+      successMessage.classList.add("visible");
+
+      // Add a tiny "happy click" animation
+      yesButton.style.transform = `scale(${yesScale * 1.08}) translateY(-2px)`;
+      yesButton.style.background =
+        "linear-gradient(135deg, #ffb6c1, #ff69b4)";
+      setTimeout(() => {
+        yesButton.style.transform = `scale(${yesScale})`;
+      }, 200);
+    });
+
+    // Ensure No box starts in a decent position on load
+    window.addEventListener("load", () => {
+      const { innerWidth: w, innerHeight: h } = window;
+      const rect = noBox.getBoundingClientRect();
+      const startLeft = w * 0.65 - rect.width / 2;
+      const startTop = h * 0.55 - rect.height / 2;
+
+      noBox.style.position = "fixed";
+      noBox.style.left = `${Math.max(20, startLeft)}px`;
+      noBox.style.top = `${Math.max(20, startTop)}px`;
+    });
+
+    // Adjust No box if viewport size changes
+    window.addEventListener("resize", () => {
+      const rect = noBox.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = rect.left;
+      let top = rect.top;
+
+      left = Math.min(Math.max(8, left), vw - rect.width - 8);
+      top = Math.min(Math.max(8, top), vh - rect.height - 8);
+
+      noBox.style.left = `${left}px`;
+      noBox.style.top = `${top}px`;
+    });
+  </script>
+</body>
+</html>
